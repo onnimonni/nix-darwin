@@ -826,10 +826,28 @@ in
       # Homebrew Bundle
       echo >&2 "Homebrew bundle..."
       if [ -f "${cfg.brewPrefix}/brew" ]; then
-        # Use launchctl asuser to run in the user's GUI session context.
-        # This is required for mas (Mac App Store CLI) to access the user's
-        # App Store authentication, which is tied to the Mach bootstrap namespace.
         uid=$(/usr/bin/id -u ${escapeShellArg cfg.user})
+
+        ${optionalString (cfg.masApps != { }) ''
+        # Pre-install Mac App Store apps using "mas get" which can acquire apps
+        # for the first time. "brew bundle" uses "mas install" internally which
+        # only works for previously purchased/downloaded apps, failing with
+        # "redownload unavailable" on fresh accounts.
+        echo >&2 "Installing Mac App Store apps..."
+        ${concatStringsSep "\n" (mapAttrsToList (name: id: ''
+        if ! PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+          /bin/launchctl asuser "$uid" \
+          sudo --preserve-env=PATH --user=${escapeShellArg cfg.user} --set-home \
+          mas list | grep -q "^${toString id} "; then
+          echo >&2 "  Getting ${name} (${toString id})..."
+          PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+          /bin/launchctl asuser "$uid" \
+          sudo --preserve-env=PATH --user=${escapeShellArg cfg.user} --set-home \
+          mas get ${toString id} || echo >&2 "  Warning: failed to get ${name}"
+        fi
+        '') cfg.masApps)}
+        ''}
+
         PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
         /bin/launchctl asuser "$uid" \
         sudo \
