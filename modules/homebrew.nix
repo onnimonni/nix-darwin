@@ -837,10 +837,12 @@ in
         ${concatStringsSep "\n" (mapAttrsToList (name: id: ''
         if ! PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
           /bin/launchctl asuser "$uid" \
+          env SUDO_UID="$uid" \
           mas list | grep -q "^${toString id} "; then
           echo >&2 "  Getting ${name} (${toString id})..."
           PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
           /bin/launchctl asuser "$uid" \
+          env SUDO_UID="$uid" \
           mas get ${toString id} || echo >&2 "  Warning: failed to get ${name}"
         fi
         '') cfg.masApps)}
