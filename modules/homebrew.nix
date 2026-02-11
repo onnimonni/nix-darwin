@@ -826,7 +826,12 @@ in
       # Homebrew Bundle
       echo >&2 "Homebrew bundle..."
       if [ -f "${cfg.brewPrefix}/brew" ]; then
+        # Use launchctl asuser to run in the user's GUI session context.
+        # This is required for mas (Mac App Store CLI) to access the user's
+        # App Store authentication, which is tied to the Mach bootstrap namespace.
+        uid=$(/usr/bin/id -u ${escapeShellArg cfg.user})
         PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+        /bin/launchctl asuser "$uid" \
         sudo \
           --preserve-env=PATH \
           --user=${escapeShellArg cfg.user} \
