@@ -22,7 +22,7 @@ in {
   ];
 
   options.services.jankyborders = {
-    enable = mkEnableOption "Enable the jankyborders service.";
+    enable = mkEnableOption "the jankyborders service.";
 
     package = mkPackageOption pkgs "jankyborders" {};
 
@@ -162,6 +162,7 @@ in {
         ++ (optionalArg "order" cfg.order);
       serviceConfig.KeepAlive = true;
       serviceConfig.RunAtLoad = true;
+      managedBy = "services.jankyborders.enable";
     };
   };
 }

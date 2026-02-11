@@ -19,6 +19,7 @@ let
       # make config file readable by service
       chown -R --reference=$HOME $(dirname ${configPath})
     '' else ''
+      set -e
       export CONFIG_FILE=${configPath}
 
       mkdir -p $(dirname ${configPath})
@@ -92,8 +93,8 @@ let
       done
 
       # update global options
-      remarshal --if toml --of json ${configPath} \
-        | jq -cM ${escapeShellArg (concatStringsSep " | " [
+      tomlq -t \
+         ${escapeShellArg (concatStringsSep " | " [
             ".check_interval = ${toJSON cfg.checkInterval}"
             ".concurrent = ${toJSON cfg.concurrent}"
             ".sentry_dsn = ${toJSON cfg.sentryDSN}"
@@ -103,9 +104,9 @@ let
             ".session_server.session_timeout = ${toJSON cfg.sessionServer.sessionTimeout}"
             "del(.[] | nulls)"
             "del(.session_server[] | nulls)"
-          ])} \
-        | remarshal --if json --of toml \
-        | sponge ${configPath}
+         ])} ${configPath} \
+        > config.toml.new
+      mv config.toml.new ${configPath}
 
       # make config file readable by service
       chown -R --reference=$HOME $(dirname ${configPath})
@@ -551,14 +552,15 @@ in
     launchd.daemons.gitlab-runner = {
       environment = { #config.networking.proxy.envVars // {
         HOME = "${config.users.users.gitlab-runner.home}";
+        NIX_REMOTE = "daemon";
         NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-      } // (if config.nix.useDaemon then { NIX_REMOTE = "daemon"; } else {});
+      };
       path = with pkgs; [
         bash
         gawk
         jq
         moreutils
-        remarshal
+        yq
         # util-linux
         cfg.package
         coreutils

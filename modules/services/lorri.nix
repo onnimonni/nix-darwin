@@ -29,7 +29,16 @@ in
   };
 
   config = mkIf cfg.enable {
+    # TODO: Upstream this to NixOS.
+    assertions = [
+      {
+        assertion = config.nix.enable;
+        message = ''`services.lorri.enable` requires `nix.enable`'';
+      }
+    ];
+
     environment.systemPackages = [ pkgs.lorri ];
+
     launchd.user.agents.lorri = {
       command = with pkgs; "${lorri}/bin/lorri daemon";
       path = with pkgs; [ config.nix.package git gnutar gzip ];
@@ -41,6 +50,7 @@ in
         StandardErrorPath = cfg.logFile;
         EnvironmentVariables = { NIX_PATH = "nixpkgs=" + toString pkgs.path; };
       };
+      managedBy = "services.lorri.enable";
     };
   };
 }

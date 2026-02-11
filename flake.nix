@@ -56,6 +56,8 @@
       darwin-uninstaller = prev.callPackage ./pkgs/darwin-uninstaller { };
     };
 
+    flakeModules.default = ./flake-module.nix;
+
     darwinModules.hydra = ./modules/examples/hydra.nix;
     darwinModules.lnl = ./modules/examples/lnl.nix;
     darwinModules.simple = ./modules/examples/simple.nix;
@@ -78,6 +80,13 @@
       default = self.packages.${system}.darwin-rebuild;
 
       inherit (pkgs) darwin-option darwin-rebuild darwin-version darwin-uninstaller;
+
+      # TODO: Include manuals for active release branches in the website.
+      # (This may involve moving it to a separate repository.)
+      website = pkgs.linkFarm "nix-darwin-website" {
+        "index.html" = ./doc/website/index.html;
+        manual = "${self.packages.${system}.manualHTML}/share/doc/darwin";
+      };
     })));
   };
 }

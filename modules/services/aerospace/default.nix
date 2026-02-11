@@ -199,6 +199,7 @@ in
               type = enum [
                 "qwerty"
                 "dvorak"
+                "colemak"
               ];
               default = "qwerty";
               description = "Keymapping preset.";
@@ -253,6 +254,7 @@ in
           KeepAlive = true;
           RunAtLoad = true;
         };
+        managedBy = "services.aerospace.enable";
       };
     }
   );

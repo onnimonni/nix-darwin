@@ -18,6 +18,9 @@ let
         *${lib.escapeShellArg srv}*)
           networksetup -setdnsservers ${lib.escapeShellArgs ([ srv ] ++ (emptyList cfg.dns))}
           networksetup -setsearchdomains ${lib.escapeShellArgs ([ srv ] ++ (emptyList cfg.search))}
+          ${optionalString (cfg.dhcpClientId != null) ''
+            networksetup -setdhcp ${lib.escapeShellArgs [ srv cfg.dhcpClientId ]}
+          ''}
           ;;
       esac
     '') cfg.knownNetworkServices}
@@ -71,6 +74,56 @@ in
       '';
     };
 
+    networking.domain = mkOption {
+      default = null;
+      example = "home.arpa";
+      type = types.nullOr types.str;
+      description = ''
+        The domain.  It can be left empty if it is auto-detected through DHCP.
+      '';
+    };
+
+    networking.fqdn = mkOption {
+      type = types.str;
+      default =
+        if (cfg.hostName != "" && cfg.domain != null) then
+          "${cfg.hostName}.${cfg.domain}"
+        else
+          throw ''
+            The FQDN is required but cannot be determined from `networking.hostName`
+            and `networking.domain`. Please ensure these options are set properly or
+            set `networking.fqdn` directly.
+          '';
+      defaultText = literalExpression ''"''${networking.hostName}.''${networking.domain}"'';
+      description = ''
+        The fully qualified domain name (FQDN) of this host. By default, it is
+        the result of combining `networking.hostName` and `networking.domain.`
+
+        Using this option will result in an evaluation error if the hostname is empty or
+        no domain is specified.
+
+        Modules that accept a mere `networking.hostName` but prefer a fully qualified
+        domain name may use `networking.fqdnOrHostName` instead.
+      '';
+    };
+
+    networking.fqdnOrHostName = mkOption {
+      readOnly = true;
+      type = types.str;
+      default = if cfg.domain == null then cfg.hostName else cfg.fqdn;
+      defaultText = literalExpression ''
+        if cfg.domain == null then cfg.hostName else cfg.fqdn
+      '';
+      description = ''
+        Either the fully qualified domain name (FQDN), or just the host name if
+        it does not exists.
+
+        This is a convenience option for modules to read instead of `fqdn` when
+        a mere `hostName` is also an acceptable value; this option does not
+        throw an error when `domain` is unset.
+      '';
+    };
+
     networking.knownNetworkServices = mkOption {
       type = types.listOf types.str;
       default = [];
@@ -80,6 +133,21 @@ in
 
         To display a list of all the network services on the server's
         hardware ports, use {command}`networksetup -listallnetworkservices`.
+      '';
+    };
+
+    networking.dhcpClientId = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "my-client-id";
+      description = ''
+        The DHCP client identifier to use when requesting an IP address from a DHCP server.
+
+        If this option is set, it will be used by the system when requesting an IP address.
+        If not set, no changes will be made.
+
+        Set to the string "empty" to clear any previously configured client ID
+        and restore the system default behavior.
       '';
     };
 
@@ -112,6 +180,7 @@ in
     warnings = [
       (mkIf (cfg.knownNetworkServices == [] && cfg.dns != []) "networking.knownNetworkServices is empty, dns servers will not be configured.")
       (mkIf (cfg.knownNetworkServices == [] && cfg.search != []) "networking.knownNetworkServices is empty, dns searchdomains will not be configured.")
+      (mkIf (cfg.knownNetworkServices == [] && cfg.dhcpClientId != null) "networking.knownNetworkServices is empty, dhcp client ID will not be configured.")
     ];
 
     system.activationScripts.networking.text = ''
@@ -132,6 +201,11 @@ in
       ${optionalString (cfg.wakeOnLan.enable != null) ''
         systemsetup -setWakeOnNetworkAccess '${onOff cfg.wakeOnLan.enable}' &> /dev/null
       ''}
+
+      if [ -e /etc/hosts.before-nix-darwin ]; then
+        echo "restoring /etc/hosts..." >&2
+        sudo mv /etc/hosts{.before-nix-darwin,}
+      fi
     '';
 
   };

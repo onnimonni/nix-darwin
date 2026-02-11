@@ -8,7 +8,7 @@ let
       {
         nixpkgs.source = path;
         nixpkgs.hostPlatform = stdenv.hostPlatform.system;
-        system.includeUninstaller = false;
+        system.tools.darwin-uninstaller.enable = false;
       }
     ];
   };
@@ -31,8 +31,11 @@ in writeShellApplication {
     echo >&2 "    - remove /Applications/Nix Apps symlink"
     echo >&2 "    - cleanup static /etc files"
     echo >&2 "    - disable and remove all launchd services managed by nix-darwin"
-    if [[ $(stat -f '%Su' /nix/store) == "root" ]]; then
-      echo >&2 "    - restore nix-daemon service from nix installer as this is a multi-user install"
+    if [[
+      -e /run/current-system/Library/LaunchDaemons/org.nixos.nix-daemon.plist
+      && -e /nix/var/nix/profiles/default/Library/LaunchDaemons/org.nixos.nix-daemon.plist
+    ]]; then
+      echo >&2 "    - restore nix-daemon service from the Nix installer"
     fi
     echo >&2
 
@@ -50,16 +53,16 @@ in writeShellApplication {
     ${uninstallSystem.system}/sw/bin/darwin-rebuild activate
 
     if [[ -L /run/current-system ]]; then
-      sudo rm /run/current-system
+      rm /run/current-system
     fi
 
     if [[ -L /run ]]; then
       if [[ -e /etc/synthetic.conf ]]; then
-        sudo sed -i -E '/^run[[:space:]]/d' /etc/synthetic.conf
-        sudo /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t &>/dev/null || true
+        sed -i -E '/^run[[:space:]]/d' /etc/synthetic.conf
+        /System/Library/Filesystems/apfs.fs/Contents/Resources/apfs.util -t &>/dev/null || true
         echo >&2 "NOTE: the /run symlink will be removed on reboot"
       else
-        sudo rm /run
+        rm /run
       fi
     fi
 
@@ -87,7 +90,7 @@ in writeShellApplication {
         launchctl print system/org.nixos.nix-daemon
         pgrep -l nix-daemon
         test -e /Library/LaunchDaemons/org.nixos.nix-daemon.plist
-        [[ "$(shasum -a 256 /Library/LaunchDaemons/org.nixos.nix-daemon.plist | awk '{print $1}')" == "$(shasum -a 256 /Library/LaunchDaemons/org.nixos.nix-daemon.plist | awk '{print $1}')" ]]
+        [[ "$(shasum -a 256 /Library/LaunchDaemons/org.nixos.nix-daemon.plist | awk '{print $1}')" == "$(shasum -a 256 /nix/var/nix/profiles/default/Library/LaunchDaemons/org.nixos.nix-daemon.plist | awk '{print $1}')" ]]
         nix-store --store daemon -q --hash ${stdenv.shell}
       fi
       echo >&2 ok

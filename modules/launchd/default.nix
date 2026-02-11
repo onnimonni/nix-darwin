@@ -9,7 +9,7 @@ let
 
   toEnvironmentText = name: value: {
     name = "${value.serviceConfig.Label}.plist";
-    value.text = generators.toPlist { } value.serviceConfig;
+    value.text = generators.toPlist { escape = true; } value.serviceConfig;
   };
 
   launchdConfig = import ./launchd.nix;
@@ -90,7 +90,7 @@ let
         serviceConfig.ProgramArguments = mkIf (config.command != "") [
           "/bin/sh"
           "-c"
-          "/bin/wait4path /nix/store &amp;&amp; exec ${config.command}"
+          "/bin/wait4path /nix/store && exec ${config.command}"
         ];
         serviceConfig.EnvironmentVariables = mkIf (env != {}) env;
       };
@@ -170,7 +170,16 @@ in
 
     launchd.user.agents = mkOption {
       default = {};
-      type = types.attrsOf (types.submodule serviceOptions);
+      type = types.attrsOf (types.submodule [
+        serviceOptions
+        ({ name, ... }: {
+          options.managedBy = lib.mkOption {
+            type = lib.types.str;
+            internal = true;
+            default = lib.showOption [ "launchd" "user" "agents" name ];
+          };
+        })
+      ]);
       description = ''
         Definition of per-user launchd agents.
 
@@ -186,6 +195,18 @@ in
   };
 
   config = {
+
+    system.requiresPrimaryUser =
+      lib.map (
+        name:
+        lib.showOption [
+          "launchd"
+          "user"
+          "envVariables"
+          name
+        ]
+      ) (attrNames cfg.user.envVariables)
+      ++ lib.map ({ managedBy, ... }: managedBy) (attrValues cfg.user.agents);
 
     environment.launchAgents = mapAttrs' toEnvironmentText cfg.agents;
     environment.launchDaemons = mapAttrs' toEnvironmentText cfg.daemons;

@@ -1,10 +1,32 @@
 { config, pkgs, lib, ... }:
 
 {
+  system.primaryUser = "test-defaults-user";
+
+  imports = [
+    {
+      system.defaults.CustomUserPreferences = {
+        "NSGlobalDomain" = { "TISRomanSwitchState" = 1; };
+        "com.apple.Safari" = {
+          "com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled" =
+            true;
+        };
+      };
+    }
+    {
+      system.defaults.CustomUserPreferences = {
+        "com.apple.Safari" = {
+          "NSUserKeyEquivalents"."Quit Safari" = "@^q"; # Option-Cmd-Q
+        };
+      };
+    }
+  ];
+
   system.defaults.NSGlobalDomain.AppleShowAllFiles = true;
   system.defaults.NSGlobalDomain.AppleEnableMouseSwipeNavigateWithScrolls = false;
   system.defaults.NSGlobalDomain.AppleEnableSwipeNavigateWithScrolls = false;
   system.defaults.NSGlobalDomain.AppleFontSmoothing = 1;
+  system.defaults.NSGlobalDomain.AppleIconAppearanceTheme = "RegularDark";
   system.defaults.NSGlobalDomain.AppleICUForce24HourTime = true;
   system.defaults.NSGlobalDomain.AppleKeyboardUIMode = 3;
   system.defaults.NSGlobalDomain.ApplePressAndHoldEnabled = true;
@@ -50,8 +72,22 @@
   system.defaults.dock.appswitcher-all-displays = false;
   system.defaults.dock.autohide-delay = 0.24;
   system.defaults.dock.orientation = "left";
-  system.defaults.dock.persistent-apps = ["MyApp.app" "Cool.app"];
-  system.defaults.dock.persistent-others = ["~/Documents" "~/Downloads/file.txt"];
+  system.defaults.dock.persistent-apps = [
+    "/Applications/MyApp.app"
+    { app = "/Applications/Cool.app"; }
+    { spacer = { small = true; }; }
+    { spacer = { small = false; }; }
+    { folder = "/Applications/Utilities"; }
+    { file = "/Users/example/Downloads/test.csv"; }
+  ];
+  system.defaults.dock.persistent-others = [
+    # ./. # TODO: how to test for paths while NOT being brittle?
+    "/file"
+    { file = "/file"; }
+    "/folder.d"
+    { folder = { path = "/folder.d"; arrangement="kind"; displayas="folder"; showas = "grid"; }; }
+    { folder = "/folder"; }
+  ];
   system.defaults.dock.scroll-to-open = false;
   system.defaults.finder.AppleShowAllFiles = true;
   system.defaults.finder.ShowStatusBar = true;
@@ -73,13 +109,17 @@
   system.defaults.finder.ShowMountedServersOnDesktop = false;
   system.defaults.finder.ShowRemovableMediaOnDesktop = false;
   system.defaults.hitoolbox.AppleFnUsageType = "Show Emoji & Symbols";
+  system.defaults.iCal."first day of week" = "Wednesday";
+  system.defaults.iCal.CalendarSidebarShown = true;
+  system.defaults.iCal."TimeZone support enabled" = true;
   system.defaults.screencapture.location = "/tmp";
   system.defaults.screencapture.target = "file";
   system.defaults.screencapture.include-date = true;
+  system.defaults.screencapture.save-selections = true;
   system.defaults.screensaver.askForPassword = true;
   system.defaults.screensaver.askForPasswordDelay = 5;
   system.defaults.smb.NetBIOSName = "IMAC-000000";
-  system.defaults.smb.ServerDescription = ''Darwin\\\\U2019's iMac'';
+  system.defaults.smb.ServerDescription = ''Darwin\\U2019's iMac'';
   system.defaults.universalaccess.mouseDriverCursorSize = 1.5;
   system.defaults.universalaccess.reduceMotion = true;
   system.defaults.universalaccess.reduceTransparency = true;
@@ -102,13 +142,6 @@
   system.defaults.WindowManager.EnableTiledWindowMargins = true;
   system.defaults.WindowManager.StandardHideWidgets = true;
   system.defaults.WindowManager.StageManagerHideWidgets = true;
-  system.defaults.CustomUserPreferences = {
-    "NSGlobalDomain" = { "TISRomanSwitchState" = 1; };
-    "com.apple.Safari" = {
-      "com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled" =
-        true;
-    };
-  };
   system.defaults.controlcenter.BatteryShowPercentage = true;
   system.defaults.controlcenter.Sound = false;
   system.defaults.controlcenter.Bluetooth = true;
@@ -118,18 +151,18 @@
   system.defaults.controlcenter.NowPlaying = true;
   test = lib.strings.concatMapStringsSep "\n"
     (x: ''
-      echo >&2 "checking defaults write in /${x}"
+      echo >&2 "checking ${x} defaults write in /activate"
       ${pkgs.python3}/bin/python3 <<EOL
       import sys
       from pathlib import Path
       fixture = '${./fixtures/system-defaults-write}/${x}.txt'
-      out = '${config.out}/${x}'
+      out = '${config.out}/activate'
       if Path(fixture).read_text() not in Path(out).read_text():
         print("Did not find content from %s in %s" % (fixture, out), file=sys.stderr)
         sys.exit(1)
       EOL
     '') [
-    "activate"
-    "activate-user"
+    "system"
+    "user"
   ];
 }

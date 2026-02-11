@@ -84,6 +84,7 @@ in
         "${parentAppDir}/.Karabiner-VirtualHIDDevice-Manager.app/Contents/MacOS/Karabiner-VirtualHIDDevice-Manager" "activate"
       ];
       serviceConfig.RunAtLoad = true;
+      managedBy = "services.karabiner-elements.enable";
     };
 
     # We need this to run every reboot as /run gets nuked so we can't put this
@@ -101,10 +102,11 @@ in
     launchd.user.agents.karabiner_session_monitor = {
       serviceConfig.ProgramArguments = [
         "/bin/sh" "-c"
-        "/bin/wait4path /run/wrappers/bin &amp;&amp; /run/wrappers/bin/karabiner_session_monitor"
+        "/bin/wait4path /run/wrappers/bin && /run/wrappers/bin/karabiner_session_monitor"
       ];
       serviceConfig.Label = "org.pqrs.karabiner.karabiner_session_monitor";
       serviceConfig.KeepAlive = true;
+      managedBy = "services.karabiner-elements.enable";
     };
 
     environment.userLaunchAgents."org.pqrs.karabiner.agent.karabiner_grabber.plist".source = "${cfg.package}/Library/LaunchAgents/org.pqrs.karabiner.agent.karabiner_grabber.plist";

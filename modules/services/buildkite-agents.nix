@@ -227,14 +227,21 @@ in
       { path = cfg.runtimePackages ++ [ cfg.package pkgs.coreutils pkgs.darwin.DarwinTools ];
         environment = {
           HOME = cfg.dataDir;
+          NIX_REMOTE = "daemon";
           inherit (config.environment.variables) NIX_SSL_CERT_FILE;
-        } // (if config.nix.useDaemon then { NIX_REMOTE = "daemon"; } else {});
+        };
 
         ## NB: maximum care is taken so that secrets (ssh keys and the CI token)
         ##     don't end up in the Nix store.
         script = let
           sshDir = "${cfg.dataDir}/.ssh";
-          tagStr = lib.concatStringsSep "," (lib.mapAttrsToList (name: value: "${name}=${value}") cfg.tags);
+          tagStr =
+            name: value:
+            if lib.isList value then
+              lib.concatStringsSep "," (builtins.map (v: "${name}=${v}") value)
+            else
+              "${name}=${value}";
+          tagsStr = lib.concatStringsSep "," (lib.mapAttrsToList tagStr cfg.tags);
         in
           optionalString (cfg.privateSshKeyPath != null) ''
             mkdir -m 0700 "${sshDir}"
@@ -244,7 +251,7 @@ in
             token="$(cat ${toString cfg.tokenPath})"
             name="${cfg.name}"
             shell="${cfg.shell}"
-            tags="${tagStr}"
+            tags="${tagsStr}"
             build-path="${cfg.dataDir}/builds"
             hooks-path="${cfg.hooksPath}"
             ${cfg.extraConfig}

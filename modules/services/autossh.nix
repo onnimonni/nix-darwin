@@ -55,7 +55,7 @@ in
 
         default = [];
         description = ''
-          List of AutoSSH sessions to start as systemd services. Each service is
+          List of AutoSSH sessions to start as launchd daemon. Each daemon is
           named 'autossh-{session.name}'.
         '';
 
@@ -78,7 +78,7 @@ in
   config = mkIf (cfg.sessions != []) {
 
     launchd.daemons =
-      lib.fold ( s : acc : acc //
+      lib.foldr ( s : acc : acc //
         {
           "autossh-${s.name}" =
             let

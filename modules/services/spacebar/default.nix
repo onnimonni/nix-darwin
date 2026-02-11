@@ -22,7 +22,7 @@ in
     services.spacebar.enable = mkOption {
       type = bool;
       default = false;
-      description = "Whether to enable the spacebar spacebar.";
+      description = "Whether to enable the spacebar.";
     };
 
     services.spacebar.package = mkOption {
@@ -69,6 +69,8 @@ in
       serviceConfig.EnvironmentVariables = {
         PATH = "${cfg.package}/bin:${config.environment.systemPath}";
       };
+
+      managedBy = "services.spacebar.enable";
     };
   };
 }

@@ -12,7 +12,7 @@ let
 
   mkBrewfileSectionString = heading: entries: optionalString (entries != [ ]) ''
     # ${heading}
-    ${concatMapStringsSep "\n" (v: v.brewfileLine or v) entries}
+    ${concatStringsSep "\n" (unique (map (v: v.brewfileLine or v) entries))}
 
   '';
 
@@ -54,10 +54,10 @@ let
   # Submodules -------------------------------------------------------------------------------------
   # Option values and descriptions of Brewfile entries are sourced/derived from:
   #   * `brew` manpage: https://docs.brew.sh/Manpage
-  #   * `brew bundle` source files (at https://github.com/Homebrew/homebrew-bundle/tree/9fffe077f1a5a722ed5bd26a87ed622e8cb64e0c):
-  #     * lib/bundle/dsl.rb
-  #     * lib/bundle/{brew,cask,tap}_installer.rb
-  #     * spec/bundle/{brew,cask,tap}_installer_spec.rb
+  #   * `brew bundle` source files (at https://github.com/Homebrew/brew/tree/master/Library/Homebrew/bundle):
+  #     * dsl.rb
+  #     * {brew,cask,tap}_installer.rb
+  #     * ../test/bundle/{brew,cask,tap}_installer_spec.rb
 
   onActivationOptions = { config, ... }: {
     options = {
@@ -137,7 +137,7 @@ let
     config = {
       brewBundleCmd = concatStringsSep " " (
         optional (!config.autoUpdate) "HOMEBREW_NO_AUTO_UPDATE=1"
-        ++ [ "brew bundle --file='${brewfileFile}' --no-lock" ]
+        ++ [ "brew bundle --file='${brewfileFile}'" ]
         ++ optional (!config.upgrade) "--no-upgrade"
         ++ optional (config.cleanup == "uninstall") "--cleanup"
         ++ optional (config.cleanup == "zap") "--cleanup --zap"
@@ -234,7 +234,7 @@ let
     options = {
       name = mkOption {
         type = types.str;
-        example = "homebrew/cask-fonts";
+        example = "apple/apple";
         description = ''
           When {option}`clone_target` is unspecified, this is the name of a formula
           repository to tap from GitHub using HTTPS. For example, `"user/repo"`
@@ -502,7 +502,9 @@ let
           [](#opt-homebrew.caskArgs) for the available options.
         '';
       };
-      greedy = mkNullOrBoolOption {
+      greedy = mkOption {
+        type = types.nullOr types.bool;
+        default = cfg.greedyCasks;
         description = ''
           Whether to always upgrade this cask regardless of whether it's unversioned or it updates
           itself.
@@ -542,10 +544,10 @@ in
       [website](https://brew.sh) for installation instructions.
 
       Use the [](#opt-homebrew.brews), [](#opt-homebrew.casks),
-      [](#opt-homebrew.masApps), and [](#opt-homebrew.whalebrews) options
-      to list the Homebrew formulae, casks, Mac App Store apps, and Docker containers you'd like to
-      install. Use the [](#opt-homebrew.taps) option, to make additional formula
-      repositories available to Homebrew. This module uses those options (along with the
+      [](#opt-homebrew.masApps), [](#opt-homebrew.whalebrews), [](#opt-homebrew.vscode) options
+      to list the Homebrew formulae, casks, Mac App Store apps, Docker containers and Visual Studio
+      Code Extensions you'd like to install. Use the [](#opt-homebrew.taps) option, to make additional
+      formula repositories available to Homebrew. This module uses those options (along with the
       [](#opt-homebrew.caskArgs) options) to generate a Brewfile that
       {command}`nix-darwin` passes to the {command}`brew bundle` command during
       system activation.
@@ -558,6 +560,17 @@ in
 
       This module also provides a few options for modifying how Homebrew commands behave when
       you manually invoke them, under [](#opt-homebrew.global)'';
+
+    user = mkOption {
+      type = types.str;
+      default = config.system.primaryUser;
+      defaultText = literalExpression "config.system.primaryUser";
+      description = ''
+        The user that owns the Homebrew installation. In most cases
+        this should be the normal user account that you installed
+        Homebrew as.
+      '';
+    };
 
     brewPrefix = mkOption {
       type = types.str;
@@ -594,10 +607,10 @@ in
       type = with types; listOf (coercedTo str (name: { inherit name; }) (submodule tapOptions));
       default = [ ];
       example = literalExpression ''
-        # Adapted examples from https://github.com/Homebrew/homebrew-bundle#usage
+        # Adapted from https://docs.brew.sh/Brew-Bundle-and-Brewfile
         [
           # `brew tap`
-          "homebrew/cask"
+          "apple/apple"
 
           # `brew tap` with custom Git URL and arguments
           {
@@ -631,11 +644,18 @@ in
       '';
     };
 
+    greedyCasks = mkNullOrBoolOption {
+      description = ''
+        Whether to always upgrade casks listed in [](#opt-homebrew.casks) regardless
+        of whether it's unversioned or it updates itself.
+      '';
+    };
+
     brews = mkOption {
       type = with types; listOf (coercedTo str (name: { inherit name; }) (submodule brewOptions));
       default = [ ];
       example = literalExpression ''
-        # Adapted examples from https://github.com/Homebrew/homebrew-bundle#usage
+        # Adapted from https://docs.brew.sh/Brew-Bundle-and-Brewfile
         [
           # `brew install`
           "imagemagick"
@@ -669,7 +689,7 @@ in
       type = with types; listOf (coercedTo str (name: { inherit name; }) (submodule caskOptions));
       default = [ ];
       example = literalExpression ''
-        # Adapted examples from https://github.com/Homebrew/homebrew-bundle#usage
+        # Adapted from https://docs.brew.sh/Brew-Bundle-and-Brewfile
         [
           # `brew install --cask`
           "google-chrome"
@@ -708,9 +728,6 @@ in
       description = ''
         Applications to install from Mac App Store using {command}`mas`.
 
-        When this option is used, `"mas"` is automatically added to
-        [](#opt-homebrew.brews).
-
         Note that you need to be signed into the Mac App Store for {command}`mas` to
         successfully install and upgrade applications, and that unfortunately apps removed from this
         option will not be uninstalled automatically even if
@@ -734,6 +751,22 @@ in
 
         For more information on {command}`whalebrew` see:
         [github.com/whalebrew/whalebrew](https://github.com/whalebrew/whalebrew).
+      '';
+    };
+
+    vscode = mkOption {
+      type = with types; listOf str;
+      default = [ ];
+      example = [ "golang.go" ];
+      description = ''
+        List of Visual Studio Code extensions to install using Homebrew Bundle.
+
+        A compatible editor (Visual Studio Code, VSCodium, Cursor, or VS Code Insiders)
+        must be available. If none is found, Homebrew will attempt to install
+        `visual-studio-code` automatically.
+
+        For more information on {command}`code` see:
+        [VSCode Extension Marketplace](https://code.visualstudio.com/docs/editor/extension-marketplace).
       '';
     };
 
@@ -767,9 +800,12 @@ in
       (mkIf (options.homebrew.autoUpdate.isDefined || options.homebrew.cleanup.isDefined) "The `homebrew' module no longer upgrades outdated formulae and apps by default during `nix-darwin' system activation. To enable upgrading, set `homebrew.onActivation.upgrade = true'.")
     ];
 
+    system.requiresPrimaryUser = mkIf (cfg.enable && options.homebrew.user.highestPrio == (mkOptionDefault {}).priority) [
+      "homebrew.enable"
+    ];
+
     homebrew.brews =
-      optional (cfg.masApps != { }) "mas"
-      ++ optional (cfg.whalebrews != [ ]) "whalebrew";
+      optional (cfg.whalebrews != [ ]) "whalebrew";
 
     homebrew.brewfile =
       "# Created by `nix-darwin`'s `homebrew` module\n\n"
@@ -781,6 +817,7 @@ in
       + mkBrewfileSectionString "Mac App Store apps"
         (mapAttrsToList (n: id: ''mas "${n}", id: ${toString id}'') cfg.masApps)
       + mkBrewfileSectionString "Docker containers" (map (v: ''whalebrew "${v}"'') cfg.whalebrews)
+      + mkBrewfileSectionString "Visual Studio Code extensions" (map (v: ''vscode "${v}"'') cfg.vscode)
       + optionalString (cfg.extraConfig != "") ("# Extra config\n" + cfg.extraConfig);
 
     environment.variables = mkIf cfg.enable cfg.global.homebrewEnvironmentVariables;
@@ -789,7 +826,13 @@ in
       # Homebrew Bundle
       echo >&2 "Homebrew bundle..."
       if [ -f "${cfg.brewPrefix}/brew" ]; then
-        PATH="${cfg.brewPrefix}":$PATH ${cfg.onActivation.brewBundleCmd}
+        PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+        sudo \
+          --preserve-env=PATH \
+          --user=${escapeShellArg cfg.user} \
+          --set-home \
+          env \
+          ${cfg.onActivation.brewBundleCmd}
       else
         echo -e "\e[1;31merror: Homebrew is not installed, skipping...\e[0m" >&2
       fi
