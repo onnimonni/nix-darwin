@@ -827,6 +827,7 @@ in
       echo >&2 "Homebrew bundle..."
       if [ -f "${cfg.brewPrefix}/brew" ]; then
         uid=$(/usr/bin/id -u ${escapeShellArg cfg.user})
+        gid=$(/usr/bin/id -g ${escapeShellArg cfg.user})
 
         ${optionalString (cfg.masApps != { }) ''
         # Pre-install Mac App Store apps using "mas get" which can acquire apps
@@ -837,12 +838,12 @@ in
         ${concatStringsSep "\n" (mapAttrsToList (name: id: ''
         if ! PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
           /bin/launchctl asuser "$uid" \
-          env SUDO_UID="$uid" \
+          env SUDO_UID="$uid" SUDO_GID="$gid" \
           mas list | grep -q "^${toString id} "; then
           echo >&2 "  Getting ${name} (${toString id})..."
           PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
           /bin/launchctl asuser "$uid" \
-          env SUDO_UID="$uid" \
+          env SUDO_UID="$uid" SUDO_GID="$gid" \
           mas get ${toString id} || echo >&2 "  Warning: failed to get ${name}"
         fi
         '') cfg.masApps)}
