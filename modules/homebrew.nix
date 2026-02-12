@@ -834,42 +834,38 @@ in
         # for the first time. "brew bundle" uses "mas install" internally which
         # only works for previously purchased/downloaded apps, failing with
         # "redownload unavailable" on fresh accounts.
-        mas_stderr=$(mktemp)
-        mas_installed=$(PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
-          /bin/launchctl asuser "$uid" \
-          env SUDO_UID="$uid" SUDO_GID="$gid" \
-          mas list 2>"$mas_stderr" || true)
-        if grep -qi "error\|500" "$mas_stderr" 2>/dev/null; then
-          echo >&2 "  Warning: mas list returned an error, attempting all apps"
-          mas_installed=""
-        fi
-        rm -f "$mas_stderr"
-        mas_pids=()
-        mas_names=()
-        ${concatStringsSep "\n" (mapAttrsToList (name: id: ''
-        if ! echo "$mas_installed" | grep -q "^${toString id} "; then
-          echo >&2 "  Getting ${name} (${toString id})..."
-          PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
-          /bin/launchctl asuser "$uid" \
-          env SUDO_UID="$uid" SUDO_GID="$gid" \
-          mas get ${toString id} 2>/dev/null &
-          mas_pids+=($!)
-          mas_names+=("${name}")
-        fi
-        '') cfg.masApps)}
+        #
+        # Install sequentially to avoid App Store rate limiting / download
+        # contention and check /Applications/ to skip already-installed apps.
         mas_failed=0
-        for i in "''${!mas_pids[@]}"; do
-          if ! wait "''${mas_pids[$i]}"; then
-            echo >&2 "  Warning: failed to get ''${mas_names[$i]}"
+        mas_installed=0
+        mas_skipped=0
+        ${concatStringsSep "\n" (mapAttrsToList (name: id: ''
+        # Check if ${name} already exists in /Applications/
+        if ls /Applications/ 2>/dev/null | grep -qi "^${name}" || \
+           ls /Applications/ 2>/dev/null | grep -qi "${toString id}"; then
+          echo >&2 "  Skipping ${name} (${toString id}), already in /Applications/"
+          mas_skipped=$((mas_skipped + 1))
+        else
+          echo >&2 "  Installing ${name} (${toString id})..."
+          if PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
+            /bin/launchctl asuser "$uid" \
+            env SUDO_UID="$uid" SUDO_GID="$gid" \
+            mas get ${toString id} 2>&1 | grep -v "^Warning:"; then
+            echo >&2 "  Installed ${name} (${toString id})"
+            mas_installed=$((mas_installed + 1))
+          else
+            echo >&2 "  Warning: failed to install ${name} (${toString id})"
             mas_failed=$((mas_failed + 1))
           fi
-        done
-        if [ "$mas_failed" -gt 0 ]; then
-          echo >&2 "  $mas_failed Mac App Store app(s) failed to install"
         fi
-        # Reindex Spotlight so mas can find newly installed apps
-        echo >&2 "Reindexing Spotlight for /Applications..."
-        mdutil -E /Applications >/dev/null 2>&1 || true
+        '') cfg.masApps)}
+        echo >&2 "  Mac App Store: $mas_installed installed, $mas_skipped skipped, $mas_failed failed"
+        if [ "$mas_installed" -gt 0 ]; then
+          # Reindex Spotlight so mas can find newly installed apps
+          echo >&2 "Reindexing Spotlight for /Applications..."
+          mdutil -E /Applications >/dev/null 2>&1 || true
+        fi
         ''}
 
         PATH="${cfg.brewPrefix}:${lib.makeBinPath [ pkgs.mas ]}:$PATH" \
